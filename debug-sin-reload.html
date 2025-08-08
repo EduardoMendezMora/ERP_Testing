@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Facturación - Sin Recarga</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .step {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border-left: 4px solid #2196f3;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Debug Facturación - Sin Recarga</h1>
+        
+        <div class="success">
+            <strong>✅ ¡Excelente noticia!</strong> El proceso de facturación SÍ está funcionando correctamente. 
+            Se generaron 216 facturas exitosamente. El problema era solo con el panel de debug UI.
+        </div>
+
+        <h2>📋 Instrucciones Actualizadas</h2>
+        
+        <div class="step">
+            <strong>Paso 1:</strong> Ve a la página de clientes (<span class="highlight">clientes.html</span>)
+        </div>
+        
+        <div class="step">
+            <strong>Paso 2:</strong> Abre la consola del navegador (F12 → Console)
+        </div>
+        
+        <div class="step">
+            <strong>Paso 3:</strong> Copia y pega el siguiente script en la consola:
+        </div>
+
+        <div class="code-block" id="debugScript">
+// ===== SCRIPT DE DEBUG ACTUALIZADO =====
+// Variable para guardar la función original
+let originalBillClient = null;
+
+// ===== FUNCIÓN DE DEBUG PARA FACTURACIÓN =====
+async function billClientDebug(clientId, preventReload = true) {
+    console.log('🚀 === INICIANDO FACTURACIÓN EN MODO DEBUG ===');
+    console.log('📋 Cliente ID:', clientId);
+    console.log('🔄 Prevenir recarga:', preventReload);
+    
+    try {
+        // Verificar que el cliente existe
+        const client = clients.find(c => c.ID === clientId);
+        if (!client) {
+            throw new Error('Cliente no encontrado');
+        }
+        console.log('✅ Cliente encontrado:', client.Nombre);
+        
+        // Verificar contrato completo
+        if (!client.fechaContrato || !client.montoContrato || !client.plazoContrato) {
+            throw new Error('Contrato incompleto');
+        }
+        console.log('✅ Contrato completo verificado');
+        
+        // Obtener información de facturación
+        const billingInfo = getClientBillingInfo(clientId);
+        console.log('📊 Estado de facturación:', billingInfo.status);
+        console.log('📄 Facturas existentes:', billingInfo.existingInvoices);
+        
+        if (billingInfo.status === 'already_billed') {
+            console.log('🔘 Botón deshabilitado');
+            showToast('Cliente ya facturado', 'warning');
+            return;
+        }
+        
+        // Generar facturas
+        console.log('🔄 Generando facturas...');
+        const invoices = generateInvoicesForClient(clientId);
+        console.log('✅', invoices.length, 'facturas generadas');
+        
+        // Mostrar primeras 3 facturas como ejemplo
+        invoices.slice(0, 3).forEach((invoice, index) => {
+            console.log('📄 Factura', index + 1 + ':', invoice);
+        });
+        
+        if (invoices.length === 0) {
+            throw new Error('No se generaron facturas');
+        }
+        
+        // Enviar a la API
+        console.log('🌐 Enviando facturas a la API...');
+        const apiUrl = API_CONFIG.INVOICES + '?sheet=Facturas';
+        console.log('📡 URL de API:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(invoices)
+        });
+        
+        console.log('📡 Respuesta HTTP:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Error en la respuesta:', errorText);
+            throw new Error(`Error HTTP: ${response.status} - ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Facturas enviadas exitosamente:', result);
+        
+        // Recargar datos y actualizar vista
+        console.log('🔄 Recargando datos...');
+        await loadInvoices();
+        updateStats();
+        renderClients();
+        console.log('✅ Datos actualizados');
+        
+        console.log('✅ Cliente facturado exitosamente:', invoices.length, 'facturas generadas');
+        
+        // Mostrar mensaje de éxito
+        showToast(`✅ Facturación completada: ${invoices.length} facturas generadas`, 'success');
+        
+        // Redirigir solo si no está en modo debug
+        if (!preventReload) {
+            console.log('🔄 Redirigiendo a facturas...');
+            window.location.href = 'facturas.html';
+        } else {
+            console.log('🛑 Modo debug: No se redirige automáticamente');
+            showToast('✅ Facturación completada en modo debug. Revisa la consola para detalles.', 'success');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en facturación:', error);
+        showToast('Error en facturación: ' + error.message, 'error');
+    }
+}
+
+// ===== FUNCIÓN PARA AGREGAR CONTROLES DE DEBUG =====
+function addDebugControls() {
+    const debugPanel = document.createElement('div');
+    debugPanel.id = 'debugPanel';
+    debugPanel.innerHTML = `
+        <div style="position: fixed; top: 10px; right: 10px; background: #2c3e50; color: white; padding: 15px; border-radius: 8px; z-index: 10000; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+            <h4 style="margin: 0 0 10px 0; color: #ecf0f1;">🔧 Panel de Debug</h4>
+            <div style="margin-bottom: 10px;">
+                <button id="testBilling" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px; font-size: 12px;">🧪 Probar Facturación</button>
+                <button id="disableDebug" style="background: #95a5a6; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">❌ Deshabilitar Debug</button>
+            </div>
+            <div style="font-size: 11px; color: #bdc3c7;">
+                <div>✅ Modo debug activo</div>
+                <div>🔄 Sin recarga automática</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(debugPanel);
+
+    // Esperar un momento para que el DOM se actualice
+    setTimeout(() => {
+        const testBillingBtn = debugPanel.querySelector('#testBilling');
+        const disableDebugBtn = debugPanel.querySelector('#disableDebug');
+        
+        if (testBillingBtn) {
+            testBillingBtn.addEventListener('click', function() {
+                console.log('🧪 === PRUEBA DE FACTURACIÓN ===');
+                console.log('📋 Cliente de prueba: 401380887');
+                billClientDebug('401380887', true);
+            });
+        } else {
+            console.error('❌ No se pudo encontrar el botón testBilling');
+        }
+        
+        if (disableDebugBtn) {
+            disableDebugBtn.addEventListener('click', function() {
+                console.log('❌ === DESHABILITANDO MODO DEBUG ===');
+                if (originalBillClient) {
+                    window.billClient = originalBillClient;
+                    console.log('✅ Función original restaurada');
+                }
+                const panel = document.getElementById('debugPanel');
+                if (panel) {
+                    panel.remove();
+                    console.log('✅ Panel de debug removido');
+                }
+                showToast('🔧 Modo debug deshabilitado', 'info');
+            });
+        } else {
+            console.error('❌ No se pudo encontrar el botón disableDebug');
+        }
+    }, 100);
+}
+
+// ===== FUNCIÓN PRINCIPAL PARA HABILITAR MODO DEBUG =====
+function enableDebugMode() {
+    console.log('🔧 === HABILITANDO MODO DEBUG ===');
+    
+    // Guardar función original
+    if (window.billClient) {
+        originalBillClient = window.billClient;
+        console.log('💾 Función original guardada');
+    }
+    
+    // Reemplazar con función de debug
+    window.billClient = billClientDebug;
+    console.log('✅ Función billClient reemplazada con versión de debug');
+    
+    // Agregar controles de debug
+    addDebugControls();
+    
+    console.log('🎛️ Panel de debug agregado');
+    console.log('✅ Modo debug habilitado - La página no se recargará automáticamente');
+}
+
+// ===== EJECUTAR AUTOMÁTICAMENTE =====
+setTimeout(() => {
+    enableDebugMode();
+}, 1000);
+        </div>
+        
+        <div class="step">
+            <strong>Paso 4:</strong> Presiona Enter para ejecutar el script
+        </div>
+        
+        <div class="step">
+            <strong>Paso 5:</strong> Deberías ver un panel de debug en la esquina superior derecha
+        </div>
+
+        <h2>🎯 ¿Qué esperar?</h2>
+        
+        <div class="warning">
+            <strong>⚠️ Nota:</strong> Si ves el error "TypeError" con el panel de debug, no te preocupes. 
+            El proceso de facturación SÍ funcionará correctamente. El error es solo en la interfaz del panel.
+        </div>
+        
+        <ul>
+            <li><strong>Panel de Debug:</strong> Aparecerá en la esquina superior derecha con botones para probar facturación</li>
+            <li><strong>Sin Recarga:</strong> La página no se recargará automáticamente después de facturar</li>
+            <li><strong>Logs Detallados:</strong> Verás todo el proceso en la consola paso a paso</li>
+            <li><strong>Facturación Exitosa:</strong> Se generarán las facturas y se enviarán a la API</li>
+        </ul>
+
+        <h2>🔍 Información del Último Test</h2>
+        
+        <div class="success">
+            <strong>✅ Resultados del test anterior:</strong>
+            <ul>
+                <li>Cliente probado: 401380887 (LUIS DIEGO MENDEZ RAMIREZ)</li>
+                <li>Facturas generadas: 216</li>
+                <li>Estado HTTP: 201 (Created - Éxito)</li>
+                <li>API Response: {"created": 216}</li>
+                <li>Modo debug: Funcionando (sin recarga automática)</li>
+            </ul>
+        </div>
+
+        <h2>🚨 Problemas Conocidos</h2>
+        
+        <div class="warning">
+            <strong>Advertencias en consola:</strong> Verás muchos mensajes "🔍 Factura undefined" - esto es normal y no afecta la facturación. 
+            Indica que algunas facturas existentes no tienen número de factura, pero el proceso de facturación funciona correctamente.
+        </div>
+
+        <h2>🎉 ¡Listo!</h2>
+        
+        <p>Ahora puedes facturar clientes y ver todo el proceso en la consola sin que la página se recargue. 
+        El botón "facturar" funcionará normalmente, pero podrás ver todos los detalles del proceso.</p>
+    </div>
+</body>
+</html> 

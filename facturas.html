@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Facturas del Cliente</title>
+
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Local Stylesheets -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+    <!-- Navigation -->
+    <div class="navigation">
+        <button class="btn btn-secondary btn-large" onclick="goBackToClients()">
+            ← Volver a Clientes
+        </button>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Facturas del Cliente</h1>
+        <p id="clientName">Cargando información del cliente...</p>
+    </div>
+
+    <!-- Section Controls -->
+    <div class="section-controls">
+        <div class="controls-header">
+            <div class="controls-title">
+                🎛️ Control de Vista
+            </div>
+            <div class="quick-actions">
+                <button class="btn-control" onclick="toggleAllSections(true)">
+                    👁️ Mostrar Todo
+                </button>
+                <button class="btn-control" onclick="toggleAllSections(false)">
+                    🙈 Ocultar Todo
+                </button>
+                <button class="btn-control" onclick="showOnlyActive()">
+                    ⚡ Solo Activos
+                </button>
+            </div>
+        </div>
+
+        <div class="controls-grid">
+            <div class="control-item active" id="control-unassigned" onclick="toggleSection('unassigned')">
+                <div class="control-info">
+                    <div class="control-icon">💰</div>
+                    <div class="control-text">
+                        <div class="control-label">Pagos Sin Asignar</div>
+                        <div class="control-count" id="control-count-unassigned">0 pagos pendientes</div>
+                    </div>
+                </div>
+                <div class="control-toggle active" id="toggle-unassigned"></div>
+            </div>
+
+            <div class="control-item active" id="control-overdue" onclick="toggleSection('overdue')">
+                <div class="control-info">
+                    <div class="control-icon">🔴</div>
+                    <div class="control-text">
+                        <div class="control-label">Facturas Vencidas</div>
+                        <div class="control-count" id="control-count-overdue">0 facturas vencidas</div>
+                    </div>
+                </div>
+                <div class="control-toggle active" id="toggle-overdue"></div>
+            </div>
+
+            <div class="control-item active" id="control-upcoming" onclick="toggleSection('upcoming')">
+                <div class="control-info">
+                    <div class="control-icon">📅</div>
+                    <div class="control-text">
+                        <div class="control-label">Facturas No Vencidas</div>
+                        <div class="control-count" id="control-count-upcoming">0 próximas facturas</div>
+                    </div>
+                </div>
+                <div class="control-toggle active" id="toggle-upcoming"></div>
+            </div>
+
+            <div class="control-item active" id="control-assigned" onclick="toggleSection('assigned')">
+                <div class="control-info">
+                    <div class="control-icon">✅</div>
+                    <div class="control-text">
+                        <div class="control-label">Pagos Aplicados</div>
+                        <div class="control-count" id="control-count-assigned">0 pagos aplicados</div>
+                    </div>
+                </div>
+                <div class="control-toggle active" id="toggle-assigned"></div>
+            </div>
+
+            <div class="control-item active" id="control-paid" onclick="toggleSection('paid')">
+                <div class="control-info">
+                    <div class="control-icon">🟢</div>
+                    <div class="control-text">
+                        <div class="control-label">Facturas Pagadas</div>
+                        <div class="control-count" id="control-count-paid">0 facturas pagadas</div>
+                    </div>
+                </div>
+                <div class="control-toggle active" id="toggle-paid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Cargando facturas y pagos aplicados...</p>
+    </div>
+
+    <!-- Botón Volver al Inicio -->
+    <a href="index.html" class="home-button" title="Volver al Inicio">
+        🏠
+    </a>
+
+    <!-- Error State -->
+    <div class="error-state" id="errorState" style="display: none;">
+        <h3>❌ Error al cargar datos</h3>
+        <p id="errorMessage">No se pudieron cargar las facturas del cliente</p>
+        <button class="btn btn-primary" onclick="retryLoad()" style="margin-top: 16px;">
+            🔄 Reintentar
+        </button>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" style="display: none;">
+        <!-- Client Information -->
+        <div class="client-info">
+            <div class="client-header">
+                <div>
+                    <h2 id="clientNameDetail">Cliente</h2>
+                    <p id="clientIdDetail" style="color: #86868b;">ID: </p>
+                </div>
+            </div>
+            <div class="client-details" id="clientDetails">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="stats-summary">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value stat-paid" id="statPaid">0</div>
+                    <div class="stat-label">Pagadas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-pending" id="statPending">0</div>
+                    <div class="stat-label">Pendientes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-overdue" id="statOverdue">0</div>
+                    <div class="stat-label">Vencidas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-fines" id="statFines">₡0</div>
+                    <div class="stat-label">Total Multas</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="actions-section" style="text-align: center;">
+            <button class="btn btn-primary btn-large" onclick="openManualInvoiceModal()">
+                ➕ Crear Factura Manual
+            </button>
+            <button class="btn btn-info btn-large" style="margin-left: 12px; background-color: #17a2b8; border-color: #17a2b8;" onclick="openManualPaymentModal()">
+                💰 Crear Pago Manual
+            </button>
+            <button class="btn btn-success btn-large" style="margin-left: 12px; background-color: #25D366; border-color: #25D366;" onclick="sendAccountStatement()">
+                📱 Enviar estado de cuenta
+            </button>
+        </div>
+
+        <!-- Unassigned Payments Section -->
+        <div class="invoices-section" id="unassignedPaymentsSection">
+            <div class="section-header">
+                <h3 class="section-title">
+                    💰 Pagos Relacionados No Asignados
+                    <span class="section-count" id="unassignedPaymentsCount">0</span>
+                </h3>
+                <small style="color: #86868b; font-size: 0.8rem;">Pagos encontrados por ID_Cliente directo O ID en Observaciones</small>
+            </div>
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchUnassigned" placeholder="🔍 Buscar pagos por referencia, banco, monto..." class="search-input">
+                    <div class="search-clear" id="clearSearchUnassigned" style="display: none;">✕</div>
+                </div>
+                <div class="search-results" id="searchResultsUnassigned"></div>
+            </div>
+            <div class="invoices-grid" id="unassignedPayments"></div>
+            <div class="empty-section" id="emptyUnassignedPayments" style="display: none;">
+                <h4>📋 No hay pagos sin asignar</h4>
+                <p>Todos los pagos están correctamente asignados a facturas</p>
+            </div>
+        </div>
+
+        <!-- Overdue Invoices Section -->
+        <div class="invoices-section section-overdue" id="overdueSection">
+            <div class="section-header">
+                <h3 class="section-title">
+                    🔴 Facturas Vencidas
+                    <span class="section-count" id="overdueCount">0</span>
+                </h3>
+                <small style="color: #86868b; font-size: 0.8rem;">Incluye facturas que vencen HOY (sin multa) y las ya vencidas (con multa)</small>
+            </div>
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchOverdue" placeholder="🔍 Buscar facturas por número, concepto, fecha..." class="search-input">
+                    <div class="search-clear" id="clearSearchOverdue" style="display: none;">✕</div>
+                </div>
+                <div class="search-results" id="searchResultsOverdue"></div>
+            </div>
+            <div class="invoices-grid" id="overdueInvoices"></div>
+            <div class="empty-section" id="emptyOverdue" style="display: none;">
+                <h4>✅ No hay facturas vencidas</h4>
+                <p>No hay facturas que venzan hoy o ya vencidas</p>
+            </div>
+        </div>
+
+        <!-- Upcoming Invoices Section -->
+        <div class="invoices-section section-upcoming" id="upcomingSection">
+            <div class="section-header">
+                <h3 class="section-title">
+                    📅 Facturas No Vencidas
+                    <span class="section-count" id="upcomingCount">0</span>
+                </h3>
+                <small style="color: #86868b; font-size: 0.8rem;">Próximas 2 facturas por vencerse en el futuro</small>
+            </div>
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchUpcoming" placeholder="🔍 Buscar facturas por número, concepto, fecha..." class="search-input">
+                    <div class="search-clear" id="clearSearchUpcoming" style="display: none;">✕</div>
+                </div>
+                <div class="search-results" id="searchResultsUpcoming"></div>
+            </div>
+            <div class="invoices-grid" id="upcomingInvoices"></div>
+            <div class="empty-section" id="emptyUpcoming" style="display: none;">
+                <h4>📋 No hay facturas próximas</h4>
+                <p>No hay facturas pendientes por vencerse</p>
+            </div>
+        </div>
+
+        <!-- Assigned Payments Section -->
+        <div class="invoices-section" id="assignedPaymentsSection">
+            <div class="section-header">
+                <h3 class="section-title">
+                    ✅ Pagos Aplicados
+                    <span class="section-count section-paid" id="assignedPaymentsCount">0</span>
+                </h3>
+                <small style="color: #86868b; font-size: 0.8rem;">Pagos ya asignados a facturas - Ordenados por fecha del comprobante bancario</small>
+            </div>
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchAssigned" placeholder="🔍 Buscar pagos por referencia, banco, factura..." class="search-input">
+                    <div class="search-clear" id="clearSearchAssigned" style="display: none;">✕</div>
+                </div>
+                <div class="search-results" id="searchResultsAssigned"></div>
+            </div>
+            <div class="invoices-grid" id="assignedPayments"></div>
+            <div class="empty-section" id="emptyAssignedPayments" style="display: none;">
+                <h4>📄 No hay pagos aplicados</h4>
+                <p>Aún no se han asignado pagos a facturas</p>
+            </div>
+        </div>
+
+        <!-- Paid Invoices Section -->
+        <div class="invoices-section section-paid" id="paidSection">
+            <div class="section-header">
+                <h3 class="section-title">
+                    🟢 Facturas Pagadas
+                    <span class="section-count" id="paidCount">0</span>
+                </h3>
+                <small style="color: #86868b; font-size: 0.8rem;">Ordenadas por fecha de pago (más recientes primero)</small>
+            </div>
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchPaid" placeholder="🔍 Buscar facturas por número, concepto, fecha..." class="search-input">
+                    <div class="search-clear" id="clearSearchPaid" style="display: none;">✕</div>
+                </div>
+                <div class="search-results" id="searchResultsPaid"></div>
+            </div>
+            <div class="invoices-grid" id="paidInvoices"></div>
+            <div class="empty-section" id="emptyPaid" style="display: none;">
+                <h4>📄 No hay facturas pagadas</h4>
+                <p>Aún no se han registrado pagos</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h4 style="margin-bottom: 8px; color: #25d366;">🚀 Enviando al Grupo de WhatsApp</h4>
+        <p style="color: #666; margin: 0;">Generando PDF del recibo y enviando automáticamente...</p>
+        <small style="color: #999; margin-top: 8px; display: block;">Powered by ULTRAMSG</small>
+    </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receiptModal" onclick="closeReceiptModal()">
+    <div class="modal-content receipt-modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>🧾 Recibo de Pago</h3>
+            <button class="modal-close" onclick="closeReceiptModal()">✕</button>
+        </div>
+
+        <div class="modal-body" style="padding: 0;">
+            <div class="receipt-container" id="receiptContent">
+                <!-- Receipt content generated dynamically -->
+            </div>
+
+            <div class="receipt-modal-actions">
+                <div class="receipt-actions-left">
+                    <button type="button" class="btn btn-secondary" onclick="closeReceiptModal()">
+                        Cerrar
+                    </button>
+                    <button type="button" class="btn btn-download" onclick="downloadReceiptPDF()">
+                        📄 Descargar PDF
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="sendToWhatsAppManual()">
+                        📱 Envío Manual
+                    </button>
+                </div>
+                <div class="receipt-actions-right">
+                    <button type="button" class="btn btn-primary" onclick="printReceipt()">
+                        🖨️ Imprimir
+                    </button>
+                    <button type="button" class="btn btn-whatsapp" onclick="sendToWhatsApp()">
+                        🚀 Enviar a Grupo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Invoice Modal -->
+<div class="modal-overlay" id="editInvoiceModal" onclick="closeEditInvoiceModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>✏️ Editar Factura</h3>
+            <button class="modal-close" onclick="closeEditInvoiceModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <form id="editInvoiceForm">
+                <input type="hidden" id="editInvoiceNumber" />
+
+                <div class="form-group">
+                    <label>Número de Factura</label>
+                    <input type="text" id="editInvoiceNumberDisplay" disabled>
+                </div>
+
+                <div class="form-group">
+                    <label for="editInvoiceConcept">Concepto *</label>
+                    <select id="editInvoiceConcept" required>
+                        <option value="">Seleccione un concepto</option>
+                        <option value="Arrendamiento Semanal">Arrendamiento Semanal</option>
+                        <option value="Multa por Retraso">Multa por Retraso</option>
+                        <option value="Mantenimiento">Mantenimiento</option>
+                        <option value="Seguro">Seguro</option>
+                        <option value="Combustible">Combustible</option>
+                        <option value="Reparación">Reparación</option>
+                        <option value="Limpieza">Limpieza</option>
+                        <option value="Documentos">Tramites de Documentos</option>
+                        <option value="Multa de Tránsito">Multa de Tránsito</option>
+                        <option value="Otros">Otros</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="editInvoiceDescription">Descripción</label>
+                    <textarea id="editInvoiceDescription" placeholder="Descripción detallada del concepto"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editInvoiceAmount">Monto Base (₡) *</label>
+                        <input type="number" id="editInvoiceAmount" min="0" step="0.01" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editInvoiceDueDate">Fecha de Vencimiento *</label>
+                        <input type="date" id="editInvoiceDueDate" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editInvoiceStatus">Estado *</label>
+                        <select id="editInvoiceStatus" required>
+                            <option value="Pendiente">Pendiente</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="editPaymentDateGroup" style="display: none;">
+                        <label for="editInvoicePaymentDate">Fecha de Pago</label>
+                        <input type="date" id="editInvoicePaymentDate">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditInvoiceModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        💾 Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Invoice Modal -->
+<div class="modal-overlay" id="deleteInvoiceModal" onclick="closeDeleteInvoiceModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>🗑️ Eliminar Factura</h3>
+            <button class="modal-close" onclick="closeDeleteInvoiceModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 3rem; margin-bottom: 16px;">⚠️</div>
+                <h4 style="margin-bottom: 8px;">¿Está seguro?</h4>
+                <p style="color: #86868b; margin-bottom: 16px;">
+                    Esta acción eliminará permanentemente la factura:
+                </p>
+                <div style="background: #f9f9f9; padding: 12px; border-radius: 8px; font-weight: 600;" id="deleteInvoiceInfo">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 0; border: none; padding: 0;">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteInvoiceModal()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteInvoice()" id="confirmDeleteBtn">
+                    🗑️ Eliminar Factura
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Invoice Modal -->
+<div class="modal-overlay" id="manualInvoiceModal" onclick="closeManualInvoiceModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>➕ Crear Factura Manual</h3>
+            <button class="modal-close" onclick="closeManualInvoiceModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <form id="manualInvoiceForm">
+                <div class="form-group">
+                    <label for="invoiceConcept">Concepto *</label>
+                    <select id="invoiceConcept" required>
+                        <option value="">Seleccione un concepto</option>
+                        <option value="Arrendamiento Semanal">Arrendamiento Semanal</option>
+                        <option value="Multa por Retraso">Multa por Retraso</option>
+                        <option value="Mantenimiento">Mantenimiento</option>
+                        <option value="Seguro">Seguro</option>
+                        <option value="Combustible">Combustible</option>
+                        <option value="Reparación">Reparación</option>
+                        <option value="Limpieza">Limpieza</option>
+                        <option value="Documentos">Tramites de Documentos</option>
+                        <option value="Multa de Tránsito">Multa de Tránsito</option>
+                        <option value="Otros">Otros</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="invoiceDescription">Descripción</label>
+                    <textarea id="invoiceDescription" placeholder="Descripción detallada del concepto (opcional)"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="invoiceAmount">Monto (₡) *</label>
+                        <input type="number" id="invoiceAmount" min="1" step="0.01" placeholder="0.00" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="invoiceDueDate">Fecha de Vencimiento *</label>
+                        <input type="date" id="invoiceDueDate" required>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeManualInvoiceModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        ✅ Crear Factura
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Payment Modal -->
+<div class="modal-overlay" id="manualPaymentModal" onclick="closeManualPaymentModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>💰 Pago Manual</h3>
+            <button class="modal-close" onclick="closeManualPaymentModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <form id="manualPaymentForm">
+                <div class="form-group">
+                    <label for="manualPaymentReference">Referencia *</label>
+                    <input type="text" id="manualPaymentReference" required placeholder="Ej: PAGO-MANUAL-001">
+                </div>
+
+                <div class="form-group">
+                    <label for="manualPaymentAmount">Monto (₡) *</label>
+                    <input type="number" id="manualPaymentAmount" required min="1" step="0.01" placeholder="0.00">
+                </div>
+
+                <div class="form-group">
+                    <label for="manualPaymentDate">Fecha de Pago *</label>
+                    <input type="date" id="manualPaymentDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="manualPaymentDescription">Descripción</label>
+                    <textarea id="manualPaymentDescription" rows="3" placeholder="Descripción opcional del pago"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="manualPaymentObservations">Observaciones</label>
+                    <textarea id="manualPaymentObservations" rows="3" placeholder="Observaciones adicionales del usuario"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeManualPaymentModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        💰 Crear Pago
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Manual Payment Modal -->
+<div class="modal-overlay" id="editManualPaymentModal" onclick="closeEditManualPaymentModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>✏️ Editar Pago Manual</h3>
+            <button class="modal-close" onclick="closeEditManualPaymentModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <form id="editManualPaymentForm">
+                <div class="form-group">
+                    <label for="editManualPaymentReference">Referencia *</label>
+                    <input type="text" id="editManualPaymentReference" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editManualPaymentAmount">Monto (₡) *</label>
+                    <input type="number" id="editManualPaymentAmount" required min="1" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label for="editManualPaymentDate">Fecha de Pago *</label>
+                    <input type="date" id="editManualPaymentDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editManualPaymentDescription">Descripción</label>
+                    <textarea id="editManualPaymentDescription" rows="3"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="editManualPaymentObservations">Observaciones</label>
+                    <textarea id="editManualPaymentObservations" rows="3"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditManualPaymentModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        💾 Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Manual Payment Modal -->
+<div class="modal-overlay" id="deleteManualPaymentModal" onclick="closeDeleteManualPaymentModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>🗑️ Eliminar Pago Manual</h3>
+            <button class="modal-close" onclick="closeDeleteManualPaymentModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="alert alert-warning">
+                <strong>⚠️ ¿Está seguro?</strong><br>
+                Esta acción eliminará el pago manual y todas sus asignaciones a facturas.
+            </div>
+            
+            <div id="deleteManualPaymentInfo" style="margin: 16px 0; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+                <!-- Información del pago a eliminar -->
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteManualPaymentModal()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteManualPaymentBtn" onclick="confirmDeleteManualPayment()">
+                    🗑️ Eliminar Pago
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Distribution Modal -->
+<div class="modal-overlay" id="paymentDistributionModal" onclick="closePaymentDistributionModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>💰 Distribución de Pago</h3>
+            <button class="modal-close" onclick="closePaymentDistributionModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <div id="paymentDistributionInfo"></div>
+            <div id="invoicesDistributionList"></div>
+            <div id="distributionSummary"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closePaymentDistributionModal()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmDistributionBtn" onclick="confirmPaymentDistribution()">
+                    ✅ Aplicar Distribución
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="utils.js"></script>
+<script src="payment-management.js"></script>
+<script src="invoice-crud.js"></script>
+<script src="receipt-whatsapp.js"></script>
+<script src="main.js"></script>
+<script src="client-management.js"></script>
+<script src="account-statement.js"></script>
+<script src="manual-payments.js"></script>
+<script src="test-amount-parsing.js"></script>
+<script src="test-all-banks-format.js"></script>
+<script src="test-payment-display-issue.js"></script>
+<script src="fix-payment-amounts.js"></script>
+<script>
+    // Verificar autenticación al cargar
+    function checkAuthentication() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAdmin = urlParams.get('admin') === 'true';
+        const isVendor = urlParams.get('vendor') === 'true';
+        const hasClientId = urlParams.get('clientId');
+        
+        // Si no hay parámetros de autenticación, verificar sesión
+        if (!isAdmin && !isVendor) {
+            const session = localStorage.getItem('vendorSession');
+            
+            if (session) {
+                const sessionData = JSON.parse(session);
+                const now = new Date();
+                const expiresAt = new Date(sessionData.expiresAt);
+                
+                if (now < expiresAt) {
+                    console.log('✅ Sesión válida encontrada');
+                    // Redirigir con parámetros de sesión
+                    const currentUrl = new URL(window.location);
+                    if (sessionData.vendorId === '112220831') {
+                        currentUrl.searchParams.set('admin', 'true');
+                    } else {
+                        currentUrl.searchParams.set('vendor', 'true');
+                    }
+                    window.location.href = currentUrl.toString();
+                    return;
+                } else {
+                    console.log('❌ Sesión expirada');
+                    localStorage.removeItem('vendorSession');
+                }
+            }
+            
+            // No hay sesión válida, redirigir al login
+            console.log('🔒 No hay sesión válida, redirigiendo al login');
+            window.location.href = '/login.html';
+            return;
+        }
+        
+        // Si hay parámetros de autenticación, continuar normalmente
+        console.log('✅ Acceso autorizado a facturas');
+    }
+    
+    // Ejecutar verificación al cargar - DESHABILITADO TEMPORALMENTE
+    // checkAuthentication();
+</script>
+
+<!-- Botón Volver al Inicio -->
+<a href="index.html" class="home-button" title="Volver al Inicio">
+    🏠
+</a>
+
+<script>
+    // Efecto sticky para la información del cliente (solo en desktop)
+    function handleStickyEffect() {
+        const clientInfo = document.querySelector('.client-info');
+        if (!clientInfo) return;
+        
+        // Solo aplicar efecto sticky en desktop (ancho >= 769px)
+        function isDesktop() {
+            return window.innerWidth >= 769;
+        }
+        
+        // Si no es desktop, no aplicar el efecto
+        if (!isDesktop()) {
+            console.log('📱 Dispositivo móvil detectado - efecto sticky deshabilitado');
+            return;
+        }
+        
+        console.log('🖥️ Desktop detectado - aplicando efecto sticky');
+        
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    clientInfo.classList.remove('sticky');
+                } else {
+                    clientInfo.classList.add('sticky');
+                }
+            },
+            {
+                threshold: 1.0,
+                rootMargin: '-1px 0px 0px 0px'
+            }
+        );
+        
+        // Crear un elemento de referencia para detectar cuando la sección sale de la vista
+        const referenceElement = document.createElement('div');
+        referenceElement.style.height = '1px';
+        referenceElement.style.position = 'absolute';
+        referenceElement.style.top = '0';
+        referenceElement.style.left = '0';
+        referenceElement.style.pointerEvents = 'none';
+        referenceElement.style.zIndex = '-1';
+        
+        clientInfo.parentNode.insertBefore(referenceElement, clientInfo);
+        observer.observe(referenceElement);
+        
+        // Escuchar cambios de tamaño de ventana para habilitar/deshabilitar el efecto
+        window.addEventListener('resize', function() {
+            if (isDesktop()) {
+                // Si cambió a desktop, aplicar el efecto
+                if (!observer.root) {
+                    console.log('🖥️ Cambio a desktop - habilitando efecto sticky');
+                    observer.observe(referenceElement);
+                }
+            } else {
+                // Si cambió a móvil, deshabilitar el efecto
+                console.log('📱 Cambio a móvil - deshabilitando efecto sticky');
+                observer.unobserve(referenceElement);
+                clientInfo.classList.remove('sticky');
+            }
+        });
+    }
+    
+    // Ejecutar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+        handleStickyEffect();
+    });
+</script>
+
+<script src="test-bank-payment-assignment.js"></script>
+<script src="fix-disponible-format.js"></script>
+
+</body>
+</html> 
